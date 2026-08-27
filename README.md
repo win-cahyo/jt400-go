@@ -17,9 +17,9 @@ native/JNI paths that only apply when running inside the IBM i JVM):
 
 | Server    | Port (TCP/SSL) | Purpose                                   | Status      |
 |-----------|-----------------|--------------------------------------------|-------------|
-| as-signon | 8476 / 9476     | Authentication (user/password → session)   | planned     |
-| as-dtaq   | 8472 / 9472     | Data queue read/write (keyed & non-keyed)  | planned     |
-| as-rmtcmd | 8475 / 9475     | Run CL command / call program              | planned     |
+| as-signon | 8476 / 9476     | Authentication (user/password → session)   | implemented |
+| as-dtaq   | 8472 / 9472     | Data queue read/write (keyed & non-keyed)  | implemented |
+| as-rmtcmd | 8475 / 9475     | Run CL command / call program              | implemented |
 
 ## Architecture
 
@@ -39,15 +39,35 @@ no CGO, no JNI, no dependency on an IBM-provided native client.
 
 ## Status
 
-Early scaffolding. Wire-format details (packet header layout, opcodes,
-password encryption scheme used during sign-on, per-service request/reply
-payloads) are being derived from the JTOpen source and will be implemented
-incrementally, starting with `as400/` (shared framing) and `signon/`
-(everything else needs an authenticated session first).
+All three targeted servers are implemented and unit-tested (wire encoding,
+LL/CP parameter framing, and reply parsing verified against synthetic data
+built from the exact JTOpen source byte offsets — see each package's
+`*_test.go`). What that testing **cannot** cover, for lack of a live IBM i
+system to test against:
+
+- The password-substitute derivations (DES for password level 0/1, SHA-1
+  for level 2/3, SHA-512/PBKDF2 for level 4) are transcribed field-for-field
+  from the Java source and cross-checked against known DES/PBKDF2 test
+  vectors, but the full derivation chain has not been exercised against a
+  real signon. Level 0/1 (legacy DES) in particular carries the most risk.
+- `rmtcmd.RunCommand` only implements the Unicode command-text path (server
+  datastream level 10+, i.e. V6R1/2008 onward) — see [`rmtcmd/wire.go`](rmtcmd/wire.go)
+  for why the pre-Unicode EBCDIC path isn't implemented.
+- `rmtcmd.CallProgram` doesn't send RLE-compressed input (harmless, just
+  less bandwidth-efficient for >1KB parameters) and returns an explicit
+  error rather than mis-decoding if the server sends RLE-compressed output.
+- Free-text fields (message text/help, queue text descriptions) are decoded
+  with this library's restricted EBCDIC table (letters, digits, space,
+  `$ # @`) and show `?` for characters outside it — see
+  [`as400/auth/ebcdic.go`](as400/auth/ebcdic.go).
+
+Before pointing this at a production system, test it against a real IBM i
+system first, ideally starting with a non-destructive operation (e.g.
+`signon.Client.Authenticate`, `dtaq.Queue.Attributes`).
 
 ## Disclaimer
 
 Communicating with IBM i host servers involves transmitting credentials.
-Until the sign-on package has been implemented and reviewed, do not use this
-library against production systems. IBM i, AS/400, and DB2 for i are
-trademarks of IBM. This project has no affiliation with IBM.
+Test against a non-production system before trusting this library with
+real credentials. IBM i, AS/400, and DB2 for i are trademarks of IBM. This
+project has no affiliation with IBM.
