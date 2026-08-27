@@ -76,8 +76,13 @@ func parseExchangeAttributeReply(reply *as400.Reply) (*exchangeAttributes, error
 	if d, ok := as400.Find(params, 0x1119); ok && len(d) >= 1 {
 		attrs.PasswordLevel = auth.PasswordLevel(d[0])
 	}
-	if d, ok := as400.Find(params, 0x111F); ok {
-		attrs.JobName = strings.TrimRight(auth.DecodeEBCDICLossy(d), " ")
+	// CP 0x111F (job name) carries a 4-byte CCSID between the CP and the
+	// text — a 10-byte entry header, not the plain 6-byte LL/CP header
+	// most fields use (confirmed against SignonExchangeAttributeRep.
+	// getJobNameBytes(), which reads the name at offset+10 with length
+	// LL-10) — so the first 4 bytes of Data here are that CCSID, not text.
+	if d, ok := as400.Find(params, 0x111F); ok && len(d) >= 4 {
+		attrs.JobName = strings.TrimRight(auth.DecodeEBCDICLossy(d[4:]), " ")
 	}
 	if d, ok := as400.Find(params, 0x112E); ok && len(d) >= 1 {
 		attrs.AAFIndicator = d[0] == 0x01
@@ -163,9 +168,12 @@ func parseSignonInfoReply(reply *as400.Reply) (*SignonInfo, error) {
 	if d, ok := as400.Find(params, 0x1114); ok && len(d) >= 4 {
 		info.ServerCCSID = binary.BigEndian.Uint32(d)
 	}
-	if d, ok := as400.Find(params, 0x1104); ok && len(d) >= 10 {
+	// CP 0x1104 (returned user ID) also carries a 4-byte CCSID header
+	// before the 10-byte EBCDIC ID (see SignonInfoRep.getUserIdBytes(),
+	// which copies from offset+10) — same convention as job name above.
+	if d, ok := as400.Find(params, 0x1104); ok && len(d) >= 14 {
 		var u [10]byte
-		copy(u[:], d[:10])
+		copy(u[:], d[4:14])
 		info.UserID = strings.TrimRight(auth.DecodeEBCDIC10(u), " ")
 	}
 	if d, ok := as400.Find(params, 0x112C); ok && len(d) >= 4 {
