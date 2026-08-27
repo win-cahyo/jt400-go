@@ -6,8 +6,8 @@ import (
 
 	"fmt"
 
-	"jt400-go/as400"
-	"jt400-go/as400/auth"
+	"github.com/win-cahyo/jt400-go/as400"
+	"github.com/win-cahyo/jt400-go/as400/auth"
 )
 
 // SearchType selects how ReadKeyed matches its key against entries on a

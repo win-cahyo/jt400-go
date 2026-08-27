@@ -3,7 +3,7 @@ package rmtcmd
 import (
 	"fmt"
 
-	"jt400-go/as400"
+	"github.com/win-cahyo/jt400-go/as400"
 )
 
 // Client is an authenticated connection to an as-rmtcmd host server.

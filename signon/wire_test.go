@@ -4,8 +4,8 @@ import (
 	"encoding/binary"
 	"testing"
 
-	"jt400-go/as400"
-	"jt400-go/as400/auth"
+	"github.com/win-cahyo/jt400-go/as400"
+	"github.com/win-cahyo/jt400-go/as400/auth"
 )
 
 // ccsidTextEntry builds an LL/CP entry using the 10-byte header (LL+CP+CCSID)

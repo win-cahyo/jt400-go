@@ -4,7 +4,7 @@ import (
 	"encoding/binary"
 	"strings"
 
-	"jt400-go/as400/auth"
+	"github.com/win-cahyo/jt400-go/as400/auth"
 )
 
 // Message is one IBM i message attached to a RunCommand/CallProgram reply

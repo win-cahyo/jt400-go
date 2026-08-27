@@ -8,6 +8,24 @@ or transpile any JTOpen/JT400 source code, and it is not affiliated with or
 endorsed by IBM. JTOpen's source is used only as a functional reference for
 understanding the (largely undocumented) wire formats.
 
+## Installation
+
+```bash
+go get github.com/win-cahyo/jt400-go
+```
+
+```go
+import (
+	"github.com/win-cahyo/jt400-go/as400"
+	"github.com/win-cahyo/jt400-go/signon"
+	"github.com/win-cahyo/jt400-go/dtaq"
+	"github.com/win-cahyo/jt400-go/rmtcmd"
+)
+```
+
+Each service package is independent — import only the ones you use. See
+[`examples/`](examples) for runnable end-to-end usage (`signon`, `rmtcmd`).
+
 ## Scope
 
 This library intentionally targets **only** the three IBM i host servers

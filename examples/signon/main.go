@@ -17,8 +17,8 @@ import (
 	"os"
 	"time"
 
-	"jt400-go/as400"
-	"jt400-go/signon"
+	"github.com/win-cahyo/jt400-go/as400"
+	"github.com/win-cahyo/jt400-go/signon"
 )
 
 func main() {

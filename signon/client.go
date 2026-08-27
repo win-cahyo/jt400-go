@@ -6,8 +6,8 @@ import (
 	"strings"
 	"time"
 
-	"jt400-go/as400"
-	"jt400-go/as400/auth"
+	"github.com/win-cahyo/jt400-go/as400"
+	"github.com/win-cahyo/jt400-go/as400/auth"
 )
 
 // PasswordLevel re-exports auth.PasswordLevel so callers of this package

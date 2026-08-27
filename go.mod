@@ -1,4 +1,4 @@
-module jt400-go
+module github.com/win-cahyo/jt400-go
 
 go 1.25.5
 

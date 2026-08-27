@@ -4,7 +4,7 @@ import (
 	"encoding/binary"
 	"testing"
 
-	"jt400-go/as400/auth"
+	"github.com/win-cahyo/jt400-go/as400/auth"
 )
 
 func TestBuildXChgRandSeedRequestShape(t *testing.T) {

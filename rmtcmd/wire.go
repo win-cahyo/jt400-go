@@ -5,8 +5,8 @@ import (
 	"fmt"
 	"strings"
 
-	"jt400-go/as400"
-	"jt400-go/as400/auth"
+	"github.com/win-cahyo/jt400-go/as400"
+	"github.com/win-cahyo/jt400-go/as400/auth"
 )
 
 // MessageOption selects how many messages the server should attach to a

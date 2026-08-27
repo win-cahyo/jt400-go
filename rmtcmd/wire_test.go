@@ -5,8 +5,8 @@ import (
 	"encoding/binary"
 	"testing"
 
-	"jt400-go/as400"
-	"jt400-go/as400/auth"
+	"github.com/win-cahyo/jt400-go/as400"
+	"github.com/win-cahyo/jt400-go/as400/auth"
 )
 
 func TestBuildExchangeAttributesRequestLayout(t *testing.T) {

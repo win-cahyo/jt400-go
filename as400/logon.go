@@ -6,7 +6,7 @@ import (
 	"strings"
 	"time"
 
-	"jt400-go/as400/auth"
+	"github.com/win-cahyo/jt400-go/as400/auth"
 )
 
 // StartServerSession is the result of Logon: the generic two-step host-
