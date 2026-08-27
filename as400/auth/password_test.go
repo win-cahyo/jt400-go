@@ -35,10 +35,10 @@ func TestPBKDF2HMACSHA512MatchesReferenceImplementation(t *testing.T) {
 }
 
 func TestUTF16BE(t *testing.T) {
-	got := utf16BE("AB")
+	got := UTF16BE("AB")
 	want := []byte{0x00, 'A', 0x00, 'B'}
 	if !bytes.Equal(got, want) {
-		t.Errorf("utf16BE(\"AB\") = % X, want % X", got, want)
+		t.Errorf("UTF16BE(\"AB\") = % X, want % X", got, want)
 	}
 }
 

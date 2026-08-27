@@ -58,7 +58,7 @@ func encryptPasswordSHA1(userID, password string, clientSeed, serverSeed [8]byte
 	if err != nil {
 		return nil, fmt.Errorf("auth: user id: %w", err)
 	}
-	userIDUTF16 := utf16BE(DecodeEBCDIC10(userIDBytes))
+	userIDUTF16 := UTF16BE(DecodeEBCDIC10(userIDBytes))
 
 	pw := trimTrailingUnicodeSpace(password)
 	if pw == "" {
@@ -67,7 +67,7 @@ func encryptPasswordSHA1(userID, password string, clientSeed, serverSeed [8]byte
 	if strings.HasPrefix(pw, "*") {
 		return nil, fmt.Errorf("auth: password must not start with '*'")
 	}
-	pwBytes := utf16BE(pw)
+	pwBytes := UTF16BE(pw)
 
 	h := sha1.New()
 	h.Write(userIDUTF16)
@@ -110,7 +110,7 @@ func encryptPasswordSHA512(userID, password string, clientSeed, serverSeed [8]by
 		tail = tail[len(tail)-4:]
 	}
 	saltSource := profile + padOrTruncate(tail, 4)
-	salt := sha256.Sum256(utf16BE(saltSource))
+	salt := sha256.Sum256(UTF16BE(saltSource))
 
 	pwLatin1, err := latin1Bytes(password)
 	if err != nil {
@@ -122,7 +122,7 @@ func encryptPasswordSHA512(userID, password string, clientSeed, serverSeed [8]by
 	h.Write(token)
 	h.Write(serverSeed[:])
 	h.Write(clientSeed[:])
-	h.Write(utf16BE(profile))
+	h.Write(UTF16BE(profile))
 	h.Write(signonSequence[:])
 	return h.Sum(nil), nil
 }
@@ -146,7 +146,10 @@ func latin1Bytes(s string) ([]byte, error) {
 	return out, nil
 }
 
-func utf16BE(s string) []byte {
+// UTF16BE encodes s as big-endian UTF-16, the encoding IBM i host servers
+// use for CCSID-1200-tagged text fields (e.g. rmtcmd's Unicode command
+// path on datastream level 10+).
+func UTF16BE(s string) []byte {
 	units := utf16.Encode([]rune(s))
 	buf := make([]byte, len(units)*2)
 	for i, u := range units {
