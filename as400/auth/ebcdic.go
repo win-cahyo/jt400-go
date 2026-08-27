@@ -42,24 +42,52 @@ func buildEBCDICToASCII() map[byte]byte {
 	return m
 }
 
+// EncodeEBCDIC encodes s into unpadded EBCDIC, restricted to the same
+// character set as EncodeEBCDIC10 (A-Z, 0-9, space, $ # @). This covers
+// IBM i simple object names (queue/library names, search-type codes) but
+// not arbitrary free text such as a text description, which may contain
+// characters outside this set — callers encoding free text should expect
+// EncodeEBCDIC to reject them rather than silently drop or mistranslate.
+func EncodeEBCDIC(s string) ([]byte, error) {
+	out := make([]byte, len(s))
+	for i := 0; i < len(s); i++ {
+		e, ok := asciiToEBCDIC[s[i]]
+		if !ok {
+			return nil, fmt.Errorf("character %q is not valid in this library's restricted EBCDIC character set (A-Z, 0-9, space, $ # @)", s[i])
+		}
+		out[i] = e
+	}
+	return out, nil
+}
+
+// EncodeEBCDICPadded encodes s like EncodeEBCDIC, then blank(0x40)-pads (or
+// rejects, if s is longer) the result to exactly n bytes.
+func EncodeEBCDICPadded(s string, n int) ([]byte, error) {
+	if len(s) > n {
+		return nil, fmt.Errorf("%q is longer than %d characters", s, n)
+	}
+	enc, err := EncodeEBCDIC(s)
+	if err != nil {
+		return nil, err
+	}
+	out := make([]byte, n)
+	for i := range out {
+		out[i] = 0x40
+	}
+	copy(out, enc)
+	return out, nil
+}
+
 // EncodeEBCDIC10 encodes s (expected already upper-cased by the caller
 // where case matters) into a 10-byte, blank(0x40)-padded EBCDIC field, as
 // used for the user ID and password-level-0/1 password fields on the wire.
 func EncodeEBCDIC10(s string) ([10]byte, error) {
 	var out [10]byte
-	for i := range out {
-		out[i] = 0x40
+	b, err := EncodeEBCDICPadded(s, 10)
+	if err != nil {
+		return out, err
 	}
-	if len(s) > 10 {
-		return out, fmt.Errorf("%q is longer than 10 characters", s)
-	}
-	for i := 0; i < len(s); i++ {
-		e, ok := asciiToEBCDIC[s[i]]
-		if !ok {
-			return out, fmt.Errorf("character %q is not valid in a user ID or password-level-0/1 password", s[i])
-		}
-		out[i] = e
-	}
+	copy(out[:], b)
 	return out, nil
 }
 
