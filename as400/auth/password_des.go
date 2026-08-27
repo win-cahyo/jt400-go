@@ -1,4 +1,4 @@
-package signon
+package auth
 
 import "crypto/des"
 

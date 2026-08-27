@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"jt400-go/as400"
+	"jt400-go/as400/auth"
 )
 
 func be32(v uint32) []byte {
@@ -73,10 +74,10 @@ func parseExchangeAttributeReply(reply *as400.Reply) (*exchangeAttributes, error
 		copy(attrs.ServerSeed[:], d[:8])
 	}
 	if d, ok := as400.Find(params, 0x1119); ok && len(d) >= 1 {
-		attrs.PasswordLevel = PasswordLevel(d[0])
+		attrs.PasswordLevel = auth.PasswordLevel(d[0])
 	}
 	if d, ok := as400.Find(params, 0x111F); ok {
-		attrs.JobName = strings.TrimRight(decodeEBCDICLossy(d), " ")
+		attrs.JobName = strings.TrimRight(auth.DecodeEBCDICLossy(d), " ")
 	}
 	if d, ok := as400.Find(params, 0x112E); ok && len(d) >= 1 {
 		attrs.AAFIndicator = d[0] == 0x01
@@ -165,7 +166,7 @@ func parseSignonInfoReply(reply *as400.Reply) (*SignonInfo, error) {
 	if d, ok := as400.Find(params, 0x1104); ok && len(d) >= 10 {
 		var u [10]byte
 		copy(u[:], d[:10])
-		info.UserID = strings.TrimRight(decodeEBCDIC10(u), " ")
+		info.UserID = strings.TrimRight(auth.DecodeEBCDIC10(u), " ")
 	}
 	if d, ok := as400.Find(params, 0x112C); ok && len(d) >= 4 {
 		info.PasswordExpirationWarningDays = int32(binary.BigEndian.Uint32(d))

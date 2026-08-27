@@ -1,4 +1,4 @@
-package signon
+package auth
 
 import (
 	"crypto/hmac"
@@ -21,9 +21,11 @@ type PasswordLevel int
 // exchange, which increments it — not implemented by this library).
 var signonSequence = [8]byte{0, 0, 0, 0, 0, 0, 0, 1}
 
-// encryptPassword derives the authentication bytes sent as CP 0x1105 in a
-// SignonInfoReq, using the scheme selected by level.
-func encryptPassword(level PasswordLevel, userID, password string, clientSeed, serverSeed [8]byte) ([]byte, error) {
+// EncryptPassword derives the authentication bytes sent as CP 0x1105 during
+// any IBM i host-server logon (as-signon's SignonInfoReq, or the generic
+// start-server request used by as-dtaq/as-rmtcmd), using the scheme
+// selected by level.
+func EncryptPassword(level PasswordLevel, userID, password string, clientSeed, serverSeed [8]byte) ([]byte, error) {
 	switch {
 	case level < 2:
 		return encryptPasswordDES(userID, password, clientSeed, serverSeed)
@@ -38,13 +40,13 @@ func encryptPasswordDES(userID, password string, clientSeed, serverSeed [8]byte)
 	if password != "" && password[0] >= '0' && password[0] <= '9' {
 		password = "Q" + password
 	}
-	userIDBytes, err := encodeEBCDIC10(strings.ToUpper(userID))
+	userIDBytes, err := EncodeEBCDIC10(strings.ToUpper(userID))
 	if err != nil {
-		return nil, fmt.Errorf("signon: user id: %w", err)
+		return nil, fmt.Errorf("auth: user id: %w", err)
 	}
-	pwBytes, err := encodeEBCDIC10(strings.ToUpper(password))
+	pwBytes, err := EncodeEBCDIC10(strings.ToUpper(password))
 	if err != nil {
-		return nil, fmt.Errorf("signon: password level 0/1 password: %w", err)
+		return nil, fmt.Errorf("auth: password level 0/1 password: %w", err)
 	}
 	token := generateDESToken(userIDBytes, pwBytes)
 	sub := generateDESPasswordSubstitute(userIDBytes, token, signonSequence, clientSeed, serverSeed)
@@ -52,18 +54,18 @@ func encryptPasswordDES(userID, password string, clientSeed, serverSeed [8]byte)
 }
 
 func encryptPasswordSHA1(userID, password string, clientSeed, serverSeed [8]byte) ([]byte, error) {
-	userIDBytes, err := encodeEBCDIC10(strings.ToUpper(userID))
+	userIDBytes, err := EncodeEBCDIC10(strings.ToUpper(userID))
 	if err != nil {
-		return nil, fmt.Errorf("signon: user id: %w", err)
+		return nil, fmt.Errorf("auth: user id: %w", err)
 	}
-	userIDUTF16 := utf16BE(decodeEBCDIC10(userIDBytes))
+	userIDUTF16 := utf16BE(DecodeEBCDIC10(userIDBytes))
 
 	pw := trimTrailingUnicodeSpace(password)
 	if pw == "" {
-		return nil, fmt.Errorf("signon: password must not be empty")
+		return nil, fmt.Errorf("auth: password must not be empty")
 	}
 	if strings.HasPrefix(pw, "*") {
-		return nil, fmt.Errorf("signon: password must not start with '*'")
+		return nil, fmt.Errorf("auth: password must not start with '*'")
 	}
 	pwBytes := utf16BE(pw)
 
@@ -112,7 +114,7 @@ func encryptPasswordSHA512(userID, password string, clientSeed, serverSeed [8]by
 
 	pwLatin1, err := latin1Bytes(password)
 	if err != nil {
-		return nil, fmt.Errorf("signon: password level 4 password: %w", err)
+		return nil, fmt.Errorf("auth: password level 4 password: %w", err)
 	}
 	token := pbkdf2HMACSHA512(pwLatin1, salt[:], 10022, 64)
 

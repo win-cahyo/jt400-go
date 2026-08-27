@@ -1,4 +1,4 @@
-package signon
+package auth
 
 import (
 	"bytes"
@@ -52,11 +52,11 @@ func TestXorWith0x55AndLshift(t *testing.T) {
 }
 
 func TestGenerateDESTokenIsDeterministic(t *testing.T) {
-	userID, err := encodeEBCDIC10("QSECOFR")
+	userID, err := EncodeEBCDIC10("QSECOFR")
 	if err != nil {
 		t.Fatal(err)
 	}
-	password, err := encodeEBCDIC10("SECRET1")
+	password, err := EncodeEBCDIC10("SECRET1")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -66,7 +66,7 @@ func TestGenerateDESTokenIsDeterministic(t *testing.T) {
 		t.Error("generateDESToken is not deterministic for identical inputs")
 	}
 
-	otherPassword, _ := encodeEBCDIC10("SECRET2")
+	otherPassword, _ := EncodeEBCDIC10("SECRET2")
 	t3 := generateDESToken(userID, otherPassword)
 	if t1 == t3 {
 		t.Error("generateDESToken produced the same token for two different passwords")
@@ -74,8 +74,8 @@ func TestGenerateDESTokenIsDeterministic(t *testing.T) {
 }
 
 func TestGenerateDESPasswordSubstituteVariesWithSeeds(t *testing.T) {
-	userID, _ := encodeEBCDIC10("QSECOFR")
-	password, _ := encodeEBCDIC10("SECRET1")
+	userID, _ := EncodeEBCDIC10("QSECOFR")
+	password, _ := EncodeEBCDIC10("SECRET1")
 	token := generateDESToken(userID, password)
 
 	seedA := [8]byte{1, 1, 1, 1, 1, 1, 1, 1}

@@ -1,4 +1,11 @@
-package signon
+// Package auth implements the password-encryption schemes and EBCDIC
+// user-ID encoding shared by every IBM i host-server logon: the
+// exchange-attributes + start-server handshake used by as-dtaq and
+// as-rmtcmd, and the exchange-attributes + signon-info exchange used by
+// as-signon. It exists as its own package (rather than living inside
+// signon) purely so as400's generic connection-startup helper and the
+// signon package can both depend on it without an import cycle.
+package auth
 
 import "fmt"
 
@@ -35,10 +42,10 @@ func buildEBCDICToASCII() map[byte]byte {
 	return m
 }
 
-// encodeEBCDIC10 encodes s (expected already upper-cased by the caller
+// EncodeEBCDIC10 encodes s (expected already upper-cased by the caller
 // where case matters) into a 10-byte, blank(0x40)-padded EBCDIC field, as
 // used for the user ID and password-level-0/1 password fields on the wire.
-func encodeEBCDIC10(s string) ([10]byte, error) {
+func EncodeEBCDIC10(s string) ([10]byte, error) {
 	var out [10]byte
 	for i := range out {
 		out[i] = 0x40
@@ -56,19 +63,19 @@ func encodeEBCDIC10(s string) ([10]byte, error) {
 	return out, nil
 }
 
-// decodeEBCDIC10 is the inverse of encodeEBCDIC10. Every byte produced by
-// encodeEBCDIC10 is guaranteed present in the reverse map, so round-tripping
+// DecodeEBCDIC10 is the inverse of EncodeEBCDIC10. Every byte produced by
+// EncodeEBCDIC10 is guaranteed present in the reverse map, so round-tripping
 // our own output never hits the fallback path.
-func decodeEBCDIC10(b [10]byte) string {
-	return decodeEBCDICLossy(b[:])
+func DecodeEBCDIC10(b [10]byte) string {
+	return DecodeEBCDICLossy(b[:])
 }
 
-// decodeEBCDICLossy decodes a server-supplied EBCDIC field (e.g. a job
+// DecodeEBCDICLossy decodes a server-supplied EBCDIC field (e.g. a job
 // name) that may contain characters outside the restricted set this
 // library otherwise validates against. Unmappable bytes become '?' — this
 // is only used for informational fields, never for values that feed a
 // cryptographic derivation.
-func decodeEBCDICLossy(b []byte) string {
+func DecodeEBCDICLossy(b []byte) string {
 	out := make([]byte, len(b))
 	for i, e := range b {
 		if a, ok := ebcdicToASCII[e]; ok {

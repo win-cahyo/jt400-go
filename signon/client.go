@@ -7,7 +7,12 @@ import (
 	"time"
 
 	"jt400-go/as400"
+	"jt400-go/as400/auth"
 )
+
+// PasswordLevel re-exports auth.PasswordLevel so callers of this package
+// don't need to import as400/auth directly.
+type PasswordLevel = auth.PasswordLevel
 
 // Client is a connection to an as-signon host server that has completed
 // the exchange-attributes handshake and is ready for Authenticate.
@@ -67,11 +72,11 @@ func (c *Client) exchangeAttributes() error {
 // Authenticate signs on with userID/password, encrypting the password
 // according to the password level negotiated during Connect.
 func (c *Client) Authenticate(userID, password string) (*SignonInfo, error) {
-	authBytes, err := encryptPassword(c.passwordLvl, userID, password, c.clientSeed, c.serverSeed)
+	authBytes, err := auth.EncryptPassword(c.passwordLvl, userID, password, c.clientSeed, c.serverSeed)
 	if err != nil {
 		return nil, err
 	}
-	userIDBytes, err := encodeEBCDIC10(strings.ToUpper(userID))
+	userIDBytes, err := auth.EncodeEBCDIC10(strings.ToUpper(userID))
 	if err != nil {
 		return nil, fmt.Errorf("signon: user id: %w", err)
 	}

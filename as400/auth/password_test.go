@@ -1,4 +1,4 @@
-package signon
+package auth
 
 import (
 	"bytes"
@@ -56,7 +56,7 @@ func TestEncryptPasswordDispatchesByLevel(t *testing.T) {
 	seed1[0], seed2[0] = 1, 2
 
 	for _, level := range []PasswordLevel{0, 1, 2, 3, 4, 5} {
-		out, err := encryptPassword(level, "USER1", "Sekret123", seed1, seed2)
+		out, err := EncryptPassword(level, "USER1", "Sekret123", seed1, seed2)
 		if err != nil {
 			t.Fatalf("level %d: %v", level, err)
 		}
