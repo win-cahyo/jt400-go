@@ -4,6 +4,7 @@ import (
 	"crypto/tls"
 	"fmt"
 	"net"
+	"sync"
 	"time"
 )
 
@@ -25,8 +26,17 @@ type DialOptions struct {
 // Connection is a raw, established connection to a single IBM i host server
 // port. Service packages (signon, dtaq, rmtcmd) build their datastream
 // exchanges on top of this.
+//
+// A Connection handles one request at a time: Call writes a request and
+// blocks for its reply. Concurrent Call invocations on the same Connection
+// are not supported — this library does not implement the multi-request
+// pipelining JTOpen's AS400ThreadedServer supports, since none of the three
+// services targeted here need it.
 type Connection struct {
 	net.Conn
+
+	mu          sync.Mutex
+	correlation uint32
 }
 
 // Dial opens a TCP (or, if opts.TLSConfig is set, TLS) connection to an IBM
@@ -47,4 +57,27 @@ func Dial(opts DialOptions) (*Connection, error) {
 		return nil, fmt.Errorf("as400: dial %s: %w", addr, err)
 	}
 	return &Connection{Conn: conn}, nil
+}
+
+// Call writes req (after assigning it a fresh correlation ID) and returns
+// the next reply datastream read from the connection.
+func (c *Connection) Call(req Request) (*Reply, error) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+
+	req.Correlation = c.nextCorrelation()
+	if _, err := c.Write(req.Encode()); err != nil {
+		return nil, fmt.Errorf("as400: write request: %w", err)
+	}
+	return ReadReply(c)
+}
+
+// nextCorrelation mirrors AS400ThreadedServer.newCorrelationId(): a
+// per-connection counter starting at 1, wrapping past the reserved value 0.
+func (c *Connection) nextCorrelation() uint32 {
+	c.correlation++
+	if c.correlation == 0 {
+		c.correlation = 1
+	}
+	return c.correlation
 }
