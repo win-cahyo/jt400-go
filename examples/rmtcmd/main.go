@@ -29,6 +29,7 @@ import (
 	"time"
 
 	"jt400-go/as400"
+	"jt400-go/as400/auth"
 	"jt400-go/rmtcmd"
 )
 
@@ -103,7 +104,14 @@ func main() {
 	}
 	for i, p := range callParams {
 		if p.Usage == rmtcmd.Output || p.Usage == rmtcmd.InOut {
-			fmt.Printf("param %d output: %q (% X)\n", i, p.OutputData, p.OutputData)
+			// Program parameters carry raw, uninterpreted bytes — IBM i host
+			// programs hold character/numeric data in EBCDIC, so decode it
+			// for display. auth.DecodeEBCDICLossy shows '?' for any byte
+			// outside this library's restricted EBCDIC set (letters,
+			// digits, space, $ # @) — expected for binary/packed-decimal
+			// parameters, which aren't plain text to begin with.
+			fmt.Printf("param %d output: %q (% X) [ebcdic: %q]\n",
+				i, p.OutputData, p.OutputData, auth.DecodeEBCDICLossy(p.OutputData))
 		}
 	}
 
@@ -144,8 +152,17 @@ func parseParams(specs []string) ([]*rmtcmd.Parameter, error) {
 			return nil, fmt.Errorf("invalid -param %q: maxlen must be an integer: %w", spec, err)
 		}
 		var data []byte
-		if len(parts) == 3 {
-			data = []byte(parts[2])
+		if len(parts) == 3 && parts[2] != "" {
+			// Host program parameters hold character/numeric data in
+			// EBCDIC, blank-padded to the field's declared length — not
+			// raw ASCII bytes — so encode -param's text data the same way.
+			// This only covers this library's restricted EBCDIC set
+			// (letters, digits, space, $ # @); binary or packed-decimal
+			// parameters aren't representable through this text-based flag.
+			data, err = auth.EncodeEBCDICPadded(strings.ToUpper(parts[2]), maxLen)
+			if err != nil {
+				return nil, fmt.Errorf("invalid -param %q: %w", spec, err)
+			}
 		}
 		params = append(params, &rmtcmd.Parameter{
 			Usage:     usage,
