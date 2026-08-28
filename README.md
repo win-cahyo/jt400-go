@@ -72,8 +72,11 @@ system to test against:
   datastream level 10+, i.e. V6R1/2008 onward) — see [`rmtcmd/wire.go`](rmtcmd/wire.go)
   for why the pre-Unicode EBCDIC path isn't implemented.
 - `rmtcmd.CallProgram` doesn't send RLE-compressed input (harmless, just
-  less bandwidth-efficient for >1KB parameters) and returns an explicit
-  error rather than mis-decoding if the server sends RLE-compressed output.
+  less bandwidth-efficient for >1KB parameters). It does decompress
+  RLE-compressed *output* (the host server tends to use it for large,
+  mostly-blank-padded character parameters) — see
+  [`rmtcmd/rle.go`](rmtcmd/rle.go), transcribed from JTOpen's
+  `DataStreamCompression.decompressRLE`.
 - Free-text fields (message text/help, queue text descriptions) are decoded
   with this library's restricted EBCDIC table (letters, digits, space,
   `$ # @`) and show `?` for characters outside it — see

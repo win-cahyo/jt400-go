@@ -203,7 +203,10 @@ func buildCallProgramRequest(library, program string, params []*Parameter, dsLev
 }
 
 // parseCallProgramOutput fills OutputData on each Output/InOut parameter
-// from a successful CallProgram reply.
+// from a successful CallProgram reply. A parameter entry is
+// length(4)+code(2)+declaredLength(4)+usage(2)+data — declaredLength is the
+// parameter's true (decompressed) length, which the RLE case needs since
+// the wire data for it is shorter than that.
 func parseCallProgramOutput(body []byte, params []*Parameter) error {
 	idx := 4 // absolute offset 24, minus the 20-byte header
 	for _, p := range params {
@@ -217,14 +220,21 @@ func parseCallProgramOutput(body []byte, params []*Parameter) error {
 			return fmt.Errorf("rmtcmd: call-program reply truncated while reading output parameters")
 		}
 		byteLength := int(binary.BigEndian.Uint32(body[idx : idx+4]))
+		declaredLength := int(binary.BigEndian.Uint32(body[idx+6 : idx+10]))
 		usage := binary.BigEndian.Uint16(body[idx+10 : idx+12])
-		if usage == 22 || usage == 23 {
-			return fmt.Errorf("rmtcmd: server returned RLE-compressed output data, which this library does not decompress")
-		}
 		if byteLength < 12 || idx+byteLength > len(body) {
 			return fmt.Errorf("rmtcmd: call-program reply has an invalid parameter entry length")
 		}
-		p.OutputData = append([]byte(nil), body[idx+12:idx+byteLength]...)
+		raw := body[idx+12 : idx+byteLength]
+		if usage == 22 || usage == 23 {
+			decompressed, err := decompressRLE(raw, declaredLength)
+			if err != nil {
+				return err
+			}
+			p.OutputData = decompressed
+		} else {
+			p.OutputData = append([]byte(nil), raw...)
+		}
 		idx += byteLength
 	}
 	return nil

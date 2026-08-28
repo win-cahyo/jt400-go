@@ -159,6 +159,73 @@ func TestBuildCallProgramRequestLayout(t *testing.T) {
 	}
 }
 
+// buildOutputEntry builds one parameter entry as parseCallProgramOutput
+// expects it: length(4)+code(2, unused here)+declaredLength(4)+usage(2)+data.
+func buildOutputEntry(usage uint16, declaredLength uint32, data []byte) []byte {
+	entry := make([]byte, 12+len(data))
+	binary.BigEndian.PutUint32(entry[0:4], uint32(len(entry)))
+	binary.BigEndian.PutUint32(entry[6:10], declaredLength)
+	binary.BigEndian.PutUint16(entry[10:12], usage)
+	copy(entry[12:], data)
+	return entry
+}
+
+func TestParseCallProgramOutput(t *testing.T) {
+	t.Run("plain (uncompressed) output data", func(t *testing.T) {
+		body := make([]byte, 4)
+		body = append(body, buildOutputEntry(0, 5, []byte("HELLO"))...)
+
+		params := []*Parameter{{Usage: Output, MaxLength: 30000}}
+		if err := parseCallProgramOutput(body, params); err != nil {
+			t.Fatal(err)
+		}
+		if !bytes.Equal(params[0].OutputData, []byte("HELLO")) {
+			t.Errorf("OutputData = %q, want %q", params[0].OutputData, "HELLO")
+		}
+	})
+
+	t.Run("RLE-compressed output data is decompressed", func(t *testing.T) {
+		// "AB" followed by the pair (0x40,0x40) repeated 3 times: declared
+		// (decompressed) length is 2+6=8, wire data is 2+5=7 bytes.
+		compressed := append([]byte("AB"), rleEscape, 0x40, 0x40, 0x00, 0x03)
+		body := make([]byte, 4)
+		body = append(body, buildOutputEntry(22, 8, compressed)...)
+
+		params := []*Parameter{{Usage: Output, MaxLength: 30000}}
+		if err := parseCallProgramOutput(body, params); err != nil {
+			t.Fatal(err)
+		}
+		want := append([]byte("AB"), 0x40, 0x40, 0x40, 0x40, 0x40, 0x40)
+		if !bytes.Equal(params[0].OutputData, want) {
+			t.Errorf("OutputData = %v, want %v", params[0].OutputData, want)
+		}
+	})
+
+	t.Run("multiple parameters, only Output/InOut ones consumed", func(t *testing.T) {
+		body := make([]byte, 4)
+		body = append(body, buildOutputEntry(0, 3, []byte("ABC"))...)
+		body = append(body, buildOutputEntry(0, 2, []byte("XY"))...)
+
+		params := []*Parameter{
+			{Usage: Input, MaxLength: 10}, // skipped: not Output/InOut, no entry in body for it
+			{Usage: Output, MaxLength: 30000},
+			{Usage: InOut, MaxLength: 30000},
+		}
+		if err := parseCallProgramOutput(body, params); err != nil {
+			t.Fatal(err)
+		}
+		if params[0].OutputData != nil {
+			t.Errorf("Input param OutputData = %v, want nil", params[0].OutputData)
+		}
+		if !bytes.Equal(params[1].OutputData, []byte("ABC")) {
+			t.Errorf("param1 OutputData = %q, want %q", params[1].OutputData, "ABC")
+		}
+		if !bytes.Equal(params[2].OutputData, []byte("XY")) {
+			t.Errorf("param2 OutputData = %q, want %q", params[2].OutputData, "XY")
+		}
+	})
+}
+
 func mustEBCDIC(t *testing.T, s string) []byte {
 	t.Helper()
 	b, err := auth.EncodeEBCDICPadded(s, 10)
