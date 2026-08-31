@@ -21,6 +21,20 @@ type DialOptions struct {
 	// Timeout bounds the TCP (and TLS handshake, if any) dial. Zero means
 	// no timeout.
 	Timeout time.Duration
+	// IOTimeout bounds every Call made on the resulting Connection (the
+	// write plus the reply read), applied via net.Conn.SetDeadline before
+	// each Call. Zero (the default) means no timeout: a Call blocks
+	// indefinitely if the host server never responds, matching this
+	// package's behavior before this field existed.
+	//
+	// Without this, a host server that stops responding mid-exchange
+	// (dropped route, an overloaded server, a firewall silently eating
+	// packets) hangs the calling goroutine forever with no way to
+	// recover — worth setting for any long-lived Connection a caller
+	// intends to reuse across multiple Calls (e.g. an application-managed
+	// connection pool), since a single wedged exchange would otherwise
+	// strand it permanently.
+	IOTimeout time.Duration
 }
 
 // Connection is a raw, established connection to a single IBM i host server
@@ -37,6 +51,7 @@ type Connection struct {
 
 	mu          sync.Mutex
 	correlation uint32
+	ioTimeout   time.Duration
 }
 
 // Dial opens a TCP (or, if opts.TLSConfig is set, TLS) connection to an IBM
@@ -56,14 +71,24 @@ func Dial(opts DialOptions) (*Connection, error) {
 	if err != nil {
 		return nil, fmt.Errorf("as400: dial %s: %w", addr, err)
 	}
-	return &Connection{Conn: conn}, nil
+	return &Connection{Conn: conn, ioTimeout: opts.IOTimeout}, nil
 }
 
 // Call writes req (after assigning it a fresh correlation ID) and returns
-// the next reply datastream read from the connection.
+// the next reply datastream read from the connection. If the Connection was
+// dialed with a non-zero IOTimeout, the whole exchange (write plus reply
+// read) must complete within it or Call returns an error instead of
+// blocking forever.
 func (c *Connection) Call(req Request) (*Reply, error) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
+
+	if c.ioTimeout > 0 {
+		if err := c.SetDeadline(time.Now().Add(c.ioTimeout)); err != nil {
+			return nil, fmt.Errorf("as400: set io deadline: %w", err)
+		}
+		defer c.SetDeadline(time.Time{})
+	}
 
 	req.Correlation = c.nextCorrelation()
 	if _, err := c.Write(req.Encode()); err != nil {

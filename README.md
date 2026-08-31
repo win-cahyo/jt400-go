@@ -55,6 +55,18 @@ native/JNI paths that only apply when running inside the IBM i JVM):
 Each service package depends only on `as400/` and the standard library —
 no CGO, no JNI, no dependency on an IBM-provided native client.
 
+## Long-lived / pooled connections
+
+By default a `Connection` (and the `signon`/`dtaq`/`rmtcmd` clients built
+on it) never times out an individual `Call` once established —
+`DialOptions.Timeout` only bounds the initial dial. If your application
+holds a `Connection` open and reuses it across many calls (e.g. an
+application-managed connection pool, to avoid paying the dial + logon
+handshake on every request), set `DialOptions.IOTimeout` too: without it,
+a host server that stops responding mid-exchange (dropped route, an
+overloaded server, a firewall silently dropping packets) hangs the calling
+goroutine — and, in a pool, strands that connection — forever.
+
 ## Status
 
 All three targeted servers are implemented and unit-tested (wire encoding,
