@@ -1,6 +1,8 @@
 package as400
 
 import (
+	"context"
+	"errors"
 	"net"
 	"testing"
 	"time"
@@ -59,4 +61,82 @@ func TestIOTimeoutOnHungPeer(t *testing.T) {
 	}
 
 	<-done
+}
+
+// hungPeer starts a listener whose accepted connections read requests but
+// never reply, and returns a Connection dialed to it.
+func hungPeer(t *testing.T, ioTimeout time.Duration) *Connection {
+	t.Helper()
+	listener, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatalf("listen: %v", err)
+	}
+	t.Cleanup(func() { listener.Close() })
+	go func() {
+		conn, err := listener.Accept()
+		if err != nil {
+			return
+		}
+		defer conn.Close()
+		buf := make([]byte, 1024)
+		for {
+			if _, err := conn.Read(buf); err != nil {
+				return
+			}
+		}
+	}()
+	addr := listener.Addr().(*net.TCPAddr)
+	conn, err := Dial(DialOptions{Host: addr.IP.String(), Port: addr.Port, IOTimeout: ioTimeout})
+	if err != nil {
+		t.Fatalf("Dial: %v", err)
+	}
+	t.Cleanup(func() { conn.Close() })
+	return conn
+}
+
+func TestCallContextCancelUnblocksRead(t *testing.T) {
+	conn := hungPeer(t, 0) // no IOTimeout: only ctx can end the call
+	ctx, cancel := context.WithCancel(context.Background())
+	time.AfterFunc(100*time.Millisecond, cancel)
+
+	start := time.Now()
+	_, err := conn.CallContext(ctx, Request{ServerID: ServerDatabase, ReqRepID: 1})
+	if !errors.Is(err, context.Canceled) {
+		t.Fatalf("CallContext error = %v, want context.Canceled", err)
+	}
+	if elapsed := time.Since(start); elapsed > time.Second {
+		t.Fatalf("CallContext took %v after cancel", elapsed)
+	}
+}
+
+func TestCallContextDeadlineShorterThanIOTimeout(t *testing.T) {
+	conn := hungPeer(t, 5*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), 100*time.Millisecond)
+	defer cancel()
+
+	start := time.Now()
+	_, err := conn.CallContext(ctx, Request{ServerID: ServerDatabase, ReqRepID: 1})
+	if !errors.Is(err, context.DeadlineExceeded) {
+		t.Fatalf("CallContext error = %v, want context.DeadlineExceeded", err)
+	}
+	if elapsed := time.Since(start); elapsed > time.Second {
+		t.Fatalf("CallContext took %v; the ctx deadline should have won over IOTimeout", elapsed)
+	}
+}
+
+func TestSendDoesNotWaitForReply(t *testing.T) {
+	conn := hungPeer(t, 0)
+	done := make(chan error, 1)
+	go func() { done <- conn.Send(Request{ServerID: ServerDatabase, ReqRepID: 1}) }()
+	select {
+	case err := <-done:
+		if err != nil {
+			t.Fatalf("Send: %v", err)
+		}
+	case <-time.After(time.Second):
+		t.Fatal("Send blocked waiting for a reply")
+	}
+	if conn.correlation != 1 {
+		t.Errorf("correlation = %d after one Send, want 1", conn.correlation)
+	}
 }

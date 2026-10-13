@@ -8,6 +8,7 @@ const (
 	ServerSignon        ServerID = 0xE009 // as-signon, TCP 8476 / SSL 9476
 	ServerDataQueue     ServerID = 0xE007 // as-dtaq,   TCP 8472 / SSL 9472
 	ServerRemoteCommand ServerID = 0xE008 // as-rmtcmd, TCP 8475 / SSL 9475
+	ServerDatabase      ServerID = 0xE004 // as-database (SQL), TCP 8471 / SSL 9471
 )
 
 // Well-known TCP ports for the host servers this library supports. Use the
@@ -21,4 +22,7 @@ const (
 
 	PortRemoteCommandPlain  = 8475
 	PortRemoteCommandSecure = 9475
+
+	PortDatabasePlain  = 8471
+	PortDatabaseSecure = 9471
 )

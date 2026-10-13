@@ -1,6 +1,7 @@
 package as400
 
 import (
+	"context"
 	"crypto/tls"
 	"fmt"
 	"net"
@@ -80,21 +81,99 @@ func Dial(opts DialOptions) (*Connection, error) {
 // read) must complete within it or Call returns an error instead of
 // blocking forever.
 func (c *Connection) Call(req Request) (*Reply, error) {
+	return c.exchange(context.Background(), req, true)
+}
+
+// CallContext is Call bounded additionally by ctx: the exchange fails once
+// ctx's deadline passes (or IOTimeout, whichever comes first), or as soon
+// as ctx is cancelled. A Call interrupted this way leaves the datastream
+// out of step with the server (its reply may still arrive later), so the
+// caller must treat the Connection as unusable afterwards and close it.
+func (c *Connection) CallContext(ctx context.Context, req Request) (*Reply, error) {
+	return c.exchange(ctx, req, true)
+}
+
+// Send writes req (after assigning it a fresh correlation ID) without
+// waiting for a reply. It is only for requests the server is documented not
+// to answer — e.g. as-database requests whose operation-result bitmap asks
+// for nothing back, which JTOpen sends via AS400JDBCConnectionImpl.send.
+// Sending a request that does produce a reply would leave that reply queued
+// ahead of the next Call's, desynchronizing the connection.
+func (c *Connection) Send(req Request) error {
+	_, err := c.exchange(context.Background(), req, false)
+	return err
+}
+
+func (c *Connection) exchange(ctx context.Context, req Request, wantReply bool) (*Reply, error) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 
+	if err := ctx.Err(); err != nil {
+		return nil, fmt.Errorf("as400: %w", err)
+	}
+
+	var deadline time.Time
 	if c.ioTimeout > 0 {
-		if err := c.SetDeadline(time.Now().Add(c.ioTimeout)); err != nil {
+		deadline = time.Now().Add(c.ioTimeout)
+	}
+	if d, ok := ctx.Deadline(); ok && (deadline.IsZero() || d.Before(deadline)) {
+		deadline = d
+	}
+	if !deadline.IsZero() {
+		if err := c.SetDeadline(deadline); err != nil {
 			return nil, fmt.Errorf("as400: set io deadline: %w", err)
 		}
 		defer c.SetDeadline(time.Time{})
 	}
 
+	// On cancellation, force any blocked read/write to return immediately
+	// by moving the deadline into the past. The watcher is stopped (and
+	// waited for) before the deferred deadline reset above runs, so it can
+	// never clobber the reset.
+	if ctx.Done() != nil {
+		stop := make(chan struct{})
+		exited := make(chan struct{})
+		go func() {
+			defer close(exited)
+			select {
+			case <-ctx.Done():
+				c.SetDeadline(time.Unix(1, 0))
+			case <-stop:
+			}
+		}()
+		defer func() {
+			close(stop)
+			<-exited
+		}()
+	}
+
 	req.Correlation = c.nextCorrelation()
 	if _, err := c.Write(req.Encode()); err != nil {
-		return nil, fmt.Errorf("as400: write request: %w", err)
+		return nil, wrapIOError("write request", ctx, err)
 	}
-	return ReadReply(c)
+	if !wantReply {
+		return nil, nil
+	}
+	reply, err := ReadReply(c)
+	if err != nil {
+		return nil, wrapIOError("read reply", ctx, err)
+	}
+	return reply, nil
+}
+
+// wrapIOError reports ctx's error in place of the raw deadline error when
+// it was ctx (not IOTimeout or the network) that cut the exchange short.
+func wrapIOError(op string, ctx context.Context, err error) error {
+	if ctxErr := ctx.Err(); ctxErr != nil {
+		return fmt.Errorf("as400: %s: %w (%v)", op, ctxErr, err)
+	}
+	// The socket deadline is ctx's own deadline when that is the earlier
+	// one, so the read can time out an instant before ctx's timer marks
+	// ctx done; attribute it to ctx all the same.
+	if d, ok := ctx.Deadline(); ok && !time.Now().Before(d) {
+		return fmt.Errorf("as400: %s: %w (%v)", op, context.DeadlineExceeded, err)
+	}
+	return fmt.Errorf("as400: %s: %w", op, err)
 }
 
 // nextCorrelation mirrors AS400ThreadedServer.newCorrelationId(): a
