@@ -88,7 +88,7 @@ err := db.QueryRowContext(ctx,
 	trxID, trDate).Scan(&status, &desc)
 
 res, err := db.ExecContext(ctx,
-	"UPDATE JTGKNVSYA.CMSBDUE SET TYPE = '1', SPVID = ? WHERE TRX_ID = ?", spvID, trxID)
+	"UPDATE TABLE_NAME SET TYPE = '1', SPVID = ? WHERE TRX_ID = ?", spvID, trxID)
 n, _ := res.RowsAffected()
 ```
 
